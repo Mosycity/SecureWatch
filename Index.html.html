@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SecureWatch — Vendor Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:#080c10; --surface:#0d1117; --surface2:#131920; --border:#1e2d3d;
+    --accent:#00e5ff; --ok:#00e676; --text:#c9d5e0; --muted:#4a6177;
+    --crit:#ff3b5c; --high:#ff6b35; --med:#ffc107; --low:#00e676;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;inset:0;
+    background-image:linear-gradient(rgba(0,229,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,0.03) 1px,transparent 1px);
+    background-size:40px 40px;pointer-events:none;z-index:0}
+  .container{position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:0 24px 48px}
+
+  /* HEADER */
+  header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;
+    border-bottom:1px solid var(--border);background:rgba(8,12,16,0.95);backdrop-filter:blur(12px);
+    position:sticky;top:0;z-index:100}
+  .logo{display:flex;align-items:center;gap:12px}
+  .logo-icon{width:34px;height:34px;background:var(--accent);
+    clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);animation:pulse-hex 3s infinite}
+  @keyframes pulse-hex{0%,100%{box-shadow:0 0 0 0 rgba(0,229,255,0.4)}50%{box-shadow:0 0 0 10px rgba(0,229,255,0)}}
+  .logo-text{font-size:1.25rem;font-weight:800;letter-spacing:0.05em}
+  .logo-text span{color:var(--accent)}
+  .header-right{display:flex;align-items:center;gap:14px}
+  .last-updated{font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--muted)}
+  .live-badge{display:flex;align-items:center;gap:6px;background:rgba(0,230,118,0.1);
+    border:1px solid rgba(0,230,118,0.3);padding:4px 10px;border-radius:20px;
+    font-size:0.7rem;font-weight:700;color:var(--ok);letter-spacing:0.08em}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:blink 1.2s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+
+  /* NAV TABS (top-level sections) */
+  .nav-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-top:0;background:var(--surface)}
+  .nav-tab{padding:14px 24px;cursor:pointer;font-size:0.8rem;font-weight:700;letter-spacing:0.06em;
+    color:var(--muted);border-bottom:2px solid transparent;transition:all 0.2s;text-transform:uppercase}
+  .nav-tab:hover{color:var(--text)}
+  .nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .nav-section{display:none}
+  .nav-section.active{display:block}
+
+  /* STATS */
+  .stats-bar{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;
+    background:var(--border);border:1px solid var(--border);margin:28px 0 0;border-radius:8px;overflow:hidden}
+  .stat-card{background:var(--surface);padding:16px 18px;text-align:center;transition:background 0.2s}
+  .stat-card:hover{background:var(--surface2)}
+  .stat-label{font-size:0.66rem;font-weight:700;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+  .stat-value{font-family:'Share Tech Mono',monospace;font-size:1.75rem;font-weight:400;line-height:1}
+  .stat-value.crit{color:var(--crit)} .stat-value.high{color:var(--high)}
+  .stat-value.med{color:var(--med)}   .stat-value.low{color:var(--low)}
+  .stat-value.total{color:var(--accent)}
+
+  .section-header{display:flex;align-items:center;justify-content:space-between;margin:32px 0 16px}
+  .section-title{font-size:0.72rem;font-weight:700;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase}
+
+  /* VENDOR TABS */
+  .vendor-tabs{display:flex;gap:8px;flex-wrap:wrap}
+  .vendor-tab{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--surface);
+    border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all 0.2s;
+    font-family:'Syne',sans-serif;font-size:0.82rem;font-weight:600;color:var(--muted)}
+  .vendor-tab:hover{border-color:var(--accent);color:var(--text)}
+  .vendor-tab.active{border-color:var(--accent);background:rgba(0,229,255,0.08);color:var(--accent)}
+  .vendor-tab .badge{background:rgba(255,59,92,0.15);border:1px solid rgba(255,59,92,0.3);
+    color:var(--crit);font-family:'Share Tech Mono',monospace;font-size:0.66rem;
+    padding:1px 6px;border-radius:10px;min-width:22px;text-align:center}
+  .vendor-tab.loading-tab .badge{color:var(--muted);border-color:var(--border);background:transparent}
+  .add-vendor-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;
+    border:1px dashed var(--border);border-radius:6px;cursor:pointer;
+    font-family:'Syne',sans-serif;font-size:0.82rem;font-weight:600;color:var(--muted);transition:all 0.2s}
+  .add-vendor-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .vendor-remove-btn{
+    position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    background:none;border:none;cursor:pointer;
+    color:var(--muted);font-size:0.65rem;line-height:1;
+    padding:2px 3px;border-radius:3px;transition:all 0.15s;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .vendor-remove-btn:hover{color:var(--crit);background:rgba(255,59,92,0.15);}
+
+  /* DATE RANGE */
+  .date-range-bar{display:flex;align-items:center;gap:8px;margin:20px 0 0;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px}
+  .date-range-label{font-size:0.68rem;font-weight:700;letter-spacing:0.1em;color:var(--muted);
+    text-transform:uppercase;margin-right:4px;white-space:nowrap}
+  .date-btn{padding:5px 14px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);
+    cursor:pointer;font-family:'Syne',sans-serif;font-size:0.75rem;font-weight:700;color:var(--muted);
+    transition:all 0.15s;white-space:nowrap}
+  .date-btn:hover{border-color:var(--accent);color:var(--text)}
+  .date-btn.active{border-color:var(--accent);background:rgba(0,229,255,0.1);color:var(--accent)}
+
+  /* API NOTE */
+  .api-note{display:flex;align-items:center;gap:10px;margin:12px 0 0;padding:10px 16px;
+    background:rgba(255,193,7,0.07);border:1px solid rgba(255,193,7,0.25);
+    border-radius:6px;font-size:0.76rem;color:var(--med);line-height:1.4}
+  .api-note a{color:var(--accent);text-decoration:underline}
+
+  .status-row{display:flex;align-items:center;justify-content:space-between;margin:14px 0 0;flex-wrap:wrap;gap:8px}
+  .fetch-status{font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--muted)}
+  .fetch-status.fetching{color:var(--accent)}
+  .fetch-status.done{color:var(--ok)}
+  .fetch-status.err{color:var(--crit)}
+
+  /* FILTERS */
+  .filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0 18px}
+  .filter-chip{padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;
+    cursor:pointer;font-family:'Syne',sans-serif;font-size:0.72rem;font-weight:700;color:var(--muted);transition:all 0.15s}
+  .filter-chip.active-crit{border-color:var(--crit);color:var(--crit);background:rgba(255,59,92,0.1)}
+  .filter-chip.active-high{border-color:var(--high);color:var(--high);background:rgba(255,107,53,0.1)}
+  .filter-chip.active-med{border-color:var(--med);color:var(--med);background:rgba(255,193,7,0.1)}
+  .filter-chip.active-low{border-color:var(--low);color:var(--low);background:rgba(0,230,118,0.1)}
+  .filter-chip:hover:not([class*="active"]){border-color:var(--text);color:var(--text)}
+  .search-input{margin-left:auto;background:var(--surface);border:1px solid var(--border);
+    border-radius:6px;padding:6px 14px;color:var(--text);
+    font-family:'Share Tech Mono',monospace;font-size:0.8rem;width:220px;transition:border-color 0.2s}
+  .search-input:focus{outline:none;border-color:var(--accent)}
+  .search-input::placeholder{color:var(--muted)}
+
+  /* CVE TABLE */
+  .cve-panel{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)}
+  .cve-table{width:100%;border-collapse:collapse}
+  .cve-table thead tr{background:var(--surface2);border-bottom:1px solid var(--border)}
+  .cve-table th{padding:10px 14px;text-align:left;font-size:0.65rem;font-weight:700;
+    letter-spacing:0.12em;color:var(--muted);text-transform:uppercase}
+  .cve-table tbody tr{border-bottom:1px solid rgba(30,45,61,0.5);
+    transition:background 0.15s;cursor:pointer;animation:rowIn 0.25s ease both}
+  @keyframes rowIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+  .cve-table tbody tr:hover{background:rgba(0,229,255,0.04)}
+  .cve-table td{padding:11px 14px;font-size:0.82rem}
+  .cve-id{font-family:'Share Tech Mono',monospace;color:var(--accent);font-size:0.8rem;white-space:nowrap}
+  .cve-id a{color:inherit;text-decoration:none}
+  .cve-id a:hover{text-decoration:underline}
+  .severity-badge{display:inline-block;padding:2px 9px;border-radius:4px;
+    font-size:0.66rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;font-family:'Share Tech Mono',monospace}
+  .sev-CRITICAL{background:rgba(255,59,92,0.15);color:var(--crit);border:1px solid rgba(255,59,92,0.3)}
+  .sev-HIGH{background:rgba(255,107,53,0.15);color:var(--high);border:1px solid rgba(255,107,53,0.3)}
+  .sev-MEDIUM{background:rgba(255,193,7,0.15);color:var(--med);border:1px solid rgba(255,193,7,0.3)}
+  .sev-LOW{background:rgba(0,230,118,0.15);color:var(--low);border:1px solid rgba(0,230,118,0.3)}
+  .sev-NONE{background:rgba(74,97,119,0.2);color:var(--muted);border:1px solid var(--border)}
+  .cvss-cell{display:flex;flex-direction:column;gap:5px;min-width:120px}
+  .cvss-top{display:flex;align-items:center;gap:7px}
+  .cvss-score{font-family:'Share Tech Mono',monospace;font-size:0.9rem;min-width:30px}
+  .cvss-version-tag{font-family:'Share Tech Mono',monospace;font-size:0.6rem;padding:1px 5px;border-radius:3px;
+    background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.25);color:var(--accent);letter-spacing:0.04em}
+  .cvss-version-tag.v2{background:rgba(74,97,119,0.2);border-color:var(--border);color:var(--muted)}
+  .cvss-bar{height:3px;border-radius:2px;background:var(--border);width:100%;overflow:hidden}
+  .cvss-fill{height:100%;border-radius:2px;transition:width 0.6s cubic-bezier(0.4,0,0.2,1)}
+  .desc-cell{max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);font-size:0.79rem;line-height:1.4}
+  .date-cell{font-family:'Share Tech Mono',monospace;font-size:0.73rem;color:var(--muted);white-space:nowrap}
+  .date-new{color:var(--ok);font-weight:700}
+
+  /* SKELETON */
+  .skeleton{animation:shimmer 1.5s infinite}
+  @keyframes shimmer{0%{opacity:0.3}50%{opacity:0.7}100%{opacity:0.3}}
+  .skel-row td{padding:14px 14px}
+  .skel-bar{height:11px;border-radius:4px;background:var(--surface2)}
+  .empty-state{text-align:center;padding:60px 24px;color:var(--muted)}
+  .empty-state .ico{font-size:2.2rem;margin-bottom:10px}
+  .empty-state p{font-size:0.82rem}
+
+  /* PAGINATION */
+  .pagination{display:flex;align-items:center;justify-content:space-between;
+    padding:13px 16px;border-top:1px solid var(--border);font-size:0.76rem;color:var(--muted)}
+  .page-btns{display:flex;gap:6px}
+  .page-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    border-radius:4px;padding:4px 12px;cursor:pointer;font-size:0.76rem;transition:all 0.15s;font-family:'Syne',sans-serif}
+  .page-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  .page-btn:disabled{opacity:0.3;cursor:not-allowed}
+
+  /* REFRESH */
+  .refresh-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;
+    padding:5px 12px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:0.72rem;
+    transition:all 0.2s;display:flex;align-items:center;gap:6px}
+  .refresh-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .refresh-btn.spinning .spin-icon{animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spin-icon{display:inline-block}
+
+  /* =============================================
+     INTEL FEED / RESOURCES SECTION
+  ============================================= */
+  .resources-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+    gap:16px;margin-top:28px
+  }
+  .resource-category{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:10px;overflow:hidden
+  }
+  .resource-cat-header{
+    display:flex;align-items:center;gap:10px;
+    padding:14px 18px;background:var(--surface2);
+    border-bottom:1px solid var(--border)
+  }
+  .resource-cat-icon{font-size:1.1rem}
+  .resource-cat-title{font-size:0.78rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text)}
+  .resource-cat-badge{
+    margin-left:auto;font-family:'Share Tech Mono',monospace;font-size:0.65rem;
+    padding:2px 8px;border-radius:10px;border:1px solid var(--border);color:var(--muted)
+  }
+  .resource-list{padding:8px 0}
+  .resource-link{
+    display:flex;align-items:center;gap:12px;
+    padding:10px 18px;text-decoration:none;
+    transition:background 0.15s;cursor:pointer;border:none;background:none;width:100%;text-align:left
+  }
+  .resource-link:hover{background:rgba(0,229,255,0.05)}
+  .resource-link:hover .rl-name{color:var(--accent)}
+  .resource-link:hover .rl-arrow{opacity:1;transform:translateX(3px)}
+  .rl-dot{
+    width:8px;height:8px;border-radius:50%;flex-shrink:0
+  }
+  .rl-info{flex:1;min-width:0}
+  .rl-name{font-size:0.83rem;font-weight:600;color:var(--text);transition:color 0.15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rl-desc{font-size:0.7rem;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rl-arrow{color:var(--muted);font-size:0.8rem;opacity:0;transition:all 0.15s;flex-shrink:0}
+  .rl-tag{
+    font-family:'Share Tech Mono',monospace;font-size:0.6rem;
+    padding:1px 6px;border-radius:3px;flex-shrink:0;
+    font-weight:700;letter-spacing:0.05em
+  }
+  .tag-gov{background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.25);color:var(--accent)}
+  .tag-news{background:rgba(255,107,53,0.1);border:1px solid rgba(255,107,53,0.25);color:var(--high)}
+  .tag-vuln{background:rgba(255,59,92,0.1);border:1px solid rgba(255,59,92,0.25);color:var(--crit)}
+  .tag-intel{background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.25);color:var(--med)}
+  .tag-tool{background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.25);color:var(--low)}
+  .tag-vendor{background:rgba(74,97,119,0.2);border:1px solid var(--border);color:var(--muted)}
+
+  /* QUICK SEARCH BAR in resources */
+  .res-search-wrap{padding:12px 18px 4px;border-bottom:1px solid var(--border);margin-bottom:4px;display:none}
+  .res-search{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;
+    padding:6px 12px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:0.78rem}
+  .res-search:focus{outline:none;border-color:var(--accent)}
+  .res-search::placeholder{color:var(--muted)}
+
+  /* RESOURCE TOP BAR */
+  .resources-topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:28px}
+  .res-filter-chip{padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface);
+    cursor:pointer;font-family:'Syne',sans-serif;font-size:0.72rem;font-weight:700;color:var(--muted);transition:all 0.15s}
+  .res-filter-chip:hover,.res-filter-chip.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,0.07)}
+  .res-search-global{margin-left:auto;background:var(--surface);border:1px solid var(--border);
+    border-radius:6px;padding:6px 14px;color:var(--text);
+    font-family:'Share Tech Mono',monospace;font-size:0.78rem;width:200px;transition:border-color 0.2s}
+  .res-search-global:focus{outline:none;border-color:var(--accent)}
+  .res-search-global::placeholder{color:var(--muted)}
+
+  /* MODAL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);
+    z-index:200;display:none;align-items:center;justify-content:center;padding:24px}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    max-width:680px;width:100%;max-height:82vh;overflow-y:auto;padding:26px;animation:modalIn 0.2s ease}
+  @keyframes modalIn{from{transform:scale(0.95);opacity:0}to{transform:none;opacity:1}}
+  .modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+  .modal-title{font-size:1rem;font-weight:700;line-height:1.3}
+  .modal-close{background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;flex-shrink:0;transition:color 0.15s}
+  .modal-close:hover{color:var(--text)}
+  .modal-section{margin-bottom:18px}
+  .modal-label{font-size:0.65rem;font-weight:700;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+  .modal-body-text{font-size:0.83rem;line-height:1.6;color:var(--text)}
+  .modal-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+  .meta-item{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:11px}
+  .meta-item .label{font-size:0.62rem;font-weight:700;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+  .meta-item .value{font-family:'Share Tech Mono',monospace;font-size:0.88rem}
+  .nvd-link{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;
+    background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.3);border-radius:6px;
+    color:var(--accent);font-size:0.8rem;font-weight:600;text-decoration:none;transition:background 0.2s}
+  .nvd-link:hover{background:rgba(0,229,255,0.15)}
+
+  /* ADD VENDOR MODAL */
+  .input-group{margin-bottom:14px}
+  .input-group label{display:block;font-size:0.72rem;font-weight:700;letter-spacing:0.08em;color:var(--muted);margin-bottom:5px}
+  .input-group input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+    padding:9px 13px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:0.83rem;transition:border-color 0.2s}
+  .input-group input:focus{outline:none;border-color:var(--accent)}
+  .btn-primary{padding:10px 20px;background:var(--accent);color:#000;border:none;border-radius:6px;
+    font-family:'Syne',sans-serif;font-size:0.83rem;font-weight:700;cursor:pointer;transition:opacity 0.2s}
+  .btn-primary:hover{opacity:0.85}
+  .btn-secondary{padding:10px 20px;background:transparent;color:var(--muted);border:1px solid var(--border);
+    border-radius:6px;font-family:'Syne',sans-serif;font-size:0.83rem;font-weight:700;cursor:pointer;transition:all 0.2s;margin-right:8px}
+  .btn-secondary:hover{border-color:var(--text);color:var(--text)}
+
+  @media(max-width:768px){
+    .stats-bar{grid-template-columns:repeat(3,1fr)}
+    .modal-meta{grid-template-columns:1fr 1fr}
+    .desc-cell{max-width:160px}
+    .search-input,.res-search-global{width:100%;margin-left:0}
+    header{flex-wrap:wrap;gap:10px}
+    .resources-grid{grid-template-columns:1fr}
+    .nav-tab{padding:12px 14px;font-size:0.72rem}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    <div class="logo-text">Secure<span>Watch</span></div>
+  </div>
+  <div class="header-right">
+    <span class="last-updated" id="lastUpdated">—</span>
+    <div class="live-badge"><div class="live-dot"></div>LIVE NVD</div>
+  </div>
+</header>
+
+<!-- NAV TABS -->
+<div class="nav-tabs">
+  <div class="nav-tab active" onclick="showSection('cve')">🛡 CVE Intelligence</div>
+  <div class="nav-tab" onclick="showSection('resources')">🔗 Security Resources</div>
+</div>
+
+<div class="container">
+
+  <!-- ══════════════════════════════════════
+       SECTION 1 — CVE INTELLIGENCE
+  ══════════════════════════════════════ -->
+  <div class="nav-section active" id="sec-cve">
+
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-label">Total CVEs</div><div class="stat-value total" id="sc-total">—</div></div>
+      <div class="stat-card"><div class="stat-label">Critical</div><div class="stat-value crit" id="sc-crit">—</div></div>
+      <div class="stat-card"><div class="stat-label">High</div><div class="stat-value high" id="sc-high">—</div></div>
+      <div class="stat-card"><div class="stat-label">Medium</div><div class="stat-value med" id="sc-med">—</div></div>
+      <div class="stat-card"><div class="stat-label">Low / None</div><div class="stat-value low" id="sc-low">—</div></div>
+    </div>
+
+    <div class="section-header">
+      <span class="section-title">Vendor Advisories</span>
+      <button class="refresh-btn" id="refreshBtn" onclick="refreshCurrent()">
+        <span class="spin-icon" id="spinIcon">⟳</span> Refresh
+      </button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div class="vendor-tabs" id="vendorTabs"></div>
+      <button class="add-vendor-btn" onclick="openAddVendor()">＋ Add Vendor</button>
+    </div>
+
+    <div class="date-range-bar">
+      <span class="date-range-label">📅 Time Period:</span>
+      <button class="date-btn" data-days="7"   onclick="setDateRange(this,7)">Last 7 Days</button>
+      <button class="date-btn" data-days="30"  onclick="setDateRange(this,30)">Last 30 Days</button>
+      <button class="date-btn active" data-days="90" onclick="setDateRange(this,90)">Last 90 Days</button>
+      <button class="date-btn" data-days="365" onclick="setDateRange(this,365)">Last Year</button>
+      <button class="date-btn" data-days="0"   onclick="setDateRange(this,0)">All Time</button>
+    </div>
+
+    <div class="api-note">
+      ℹ️ <span>Each vendor+period query hits the NVD API directly — results are sorted <strong>newest first</strong>.
+      Without an API key, NVD allows ~5 requests/30s. If loading stalls, wait a moment and Refresh.
+      Free key: <a href="https://nvd.nist.gov/developers/request-an-api-key" target="_blank">nvd.nist.gov</a></span>
+    </div>
+
+    <div class="status-row">
+      <span class="fetch-status" id="fetchStatus">Ready</span>
+    </div>
+
+    <div class="filters">
+      <span style="font-size:0.68rem;font-weight:700;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;">Severity:</span>
+      <button class="filter-chip active-crit" data-sev="CRITICAL" onclick="toggleFilter(this,'CRITICAL')">● Critical</button>
+      <button class="filter-chip active-high" data-sev="HIGH"     onclick="toggleFilter(this,'HIGH')">● High</button>
+      <button class="filter-chip active-med"  data-sev="MEDIUM"   onclick="toggleFilter(this,'MEDIUM')">● Medium</button>
+      <button class="filter-chip active-low"  data-sev="LOW"      onclick="toggleFilter(this,'LOW')">● Low</button>
+      <input class="search-input" id="searchInput" placeholder="Search CVE ID or keyword…" oninput="onSearch()"/>
+    </div>
+
+    <div class="cve-panel">
+      <table class="cve-table">
+        <thead>
+          <tr>
+            <th>CVE ID</th><th>Severity</th><th>CVSS Score &amp; Version</th><th>Description</th><th>Published</th>
+          </tr>
+        </thead>
+        <tbody id="cveBody"></tbody>
+      </table>
+      <div class="pagination" id="pagination" style="display:none;">
+        <span id="pageInfo">Page 1</span>
+        <div class="page-btns">
+          <button class="page-btn" id="prevBtn" onclick="changePage(-1)">← Prev</button>
+          <button class="page-btn" id="nextBtn" onclick="changePage(1)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sec-cve -->
+
+  <!-- ══════════════════════════════════════
+       SECTION 2 — SECURITY RESOURCES
+  ══════════════════════════════════════ -->
+  <div class="nav-section" id="sec-resources">
+
+    <div class="resources-topbar">
+      <span style="font-size:0.72rem;font-weight:700;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;">Filter:</span>
+      <button class="res-filter-chip active" data-cat="all" onclick="filterResources(this,'all')">All</button>
+      <button class="res-filter-chip" data-cat="gov"    onclick="filterResources(this,'gov')">🏛 Government</button>
+      <button class="res-filter-chip" data-cat="news"   onclick="filterResources(this,'news')">📰 News</button>
+      <button class="res-filter-chip" data-cat="vuln"   onclick="filterResources(this,'vuln')">🔴 Vulnerabilities</button>
+      <button class="res-filter-chip" data-cat="intel"  onclick="filterResources(this,'intel')">🕵 Threat Intel</button>
+      <button class="res-filter-chip" data-cat="tool"   onclick="filterResources(this,'tool')">🛠 Tools</button>
+      <button class="res-filter-chip" data-cat="vendor" onclick="filterResources(this,'vendor')">🏢 Vendor Portals</button>
+      <input class="res-search-global" id="resSearch" placeholder="Search resources…" oninput="renderResources()"/>
+    </div>
+
+    <div class="resources-grid" id="resourcesGrid"></div>
+
+  </div><!-- /sec-resources -->
+
+</div><!-- /container -->
+
+<!-- CVE DETAIL MODAL -->
+<div class="modal-overlay" id="cveModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">—</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-meta" id="modalMeta"></div>
+    <div class="modal-section">
+      <div class="modal-label">Description</div>
+      <div class="modal-body-text" id="modalDesc">—</div>
+    </div>
+    <div class="modal-section" id="modalRefs"></div>
+    <a class="nvd-link" id="modalNvdLink" target="_blank" href="#">↗ View Full Details on NVD</a>
+  </div>
+</div>
+
+<!-- ADD VENDOR MODAL -->
+<div class="modal-overlay" id="addVendorModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <div class="modal-title">Add Vendor</div>
+      <button class="modal-close" onclick="closeAddVendor()">✕</button>
+    </div>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:16px;">
+      Enter the vendor keyword as used in NVD — e.g.
+      <code style="color:var(--accent)">fortinet</code>,
+      <code style="color:var(--accent)">microsoft</code>,
+      <code style="color:var(--accent)">checkpoint</code>.
+    </p>
+    <div class="input-group">
+      <label>NVD Keyword (lowercase)</label>
+      <input id="newVendorName" placeholder="e.g. fortinet"/>
+    </div>
+    <div class="input-group">
+      <label>Display Name</label>
+      <input id="newVendorLabel" placeholder="e.g. Fortinet"/>
+    </div>
+    <div style="margin-top:8px;">
+      <button class="btn-secondary" onclick="closeAddVendor()">Cancel</button>
+      <button class="btn-primary" onclick="addVendor()">Add Vendor</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   RESOURCES DATA
+============================================================ */
+const RESOURCES = [
+  // GOVERNMENT / OFFICIAL
+  { cat:'gov', color:'#00e5ff', name:'CISA Advisories', desc:'US Cybersecurity & Infrastructure Security Agency alerts', url:'https://www.cisa.gov/news-events/cybersecurity-advisories', tag:'gov' },
+  { cat:'gov', color:'#00e5ff', name:'CISA KEV Catalog', desc:'Known Exploited Vulnerabilities — must-patch list', url:'https://www.cisa.gov/known-exploited-vulnerabilities-catalog', tag:'gov' },
+  { cat:'gov', color:'#00e5ff', name:'NVD (NIST)', desc:'National Vulnerability Database — authoritative CVE data', url:'https://nvd.nist.gov/', tag:'gov' },
+  { cat:'gov', color:'#00e5ff', name:'US-CERT Alerts', desc:'Official US Computer Emergency Readiness Team', url:'https://www.cisa.gov/uscert/ncas/alerts', tag:'gov' },
+  { cat:'gov', color:'#00e5ff', name:'ENISA (EU)', desc:'EU Agency for Cybersecurity advisories & reports', url:'https://www.enisa.europa.eu/publications', tag:'gov' },
+  { cat:'gov', color:'#00e5ff', name:'NCSC UK', desc:'UK National Cyber Security Centre advisories', url:'https://www.ncsc.gov.uk/section/reports-advisories/', tag:'gov' },
+  { cat:'gov', color:'#00e5ff', name:'ACSC Australia', desc:'Australian Cyber Security Centre alerts', url:'https://www.cyber.gov.au/about-us/advisories', tag:'gov' },
+
+  // NEWS & BLOGS
+  { cat:'news', color:'#ff6b35', name:'BleepingComputer', desc:'Breaking cybersecurity news, malware, vulnerabilities', url:'https://www.bleepingcomputer.com/', tag:'news' },
+  { cat:'news', color:'#ff6b35', name:'The Hacker News', desc:'Cybersecurity news, data breaches, vulnerabilities', url:'https://thehackernews.com/', tag:'news' },
+  { cat:'news', color:'#ff6b35', name:'Krebs on Security', desc:'Brian Krebs — investigative cybersecurity journalism', url:'https://krebsonsecurity.com/', tag:'news' },
+  { cat:'news', color:'#ff6b35', name:'Dark Reading', desc:'Enterprise security news and analysis', url:'https://www.darkreading.com/', tag:'news' },
+  { cat:'news', color:'#ff6b35', name:'SecurityWeek', desc:'Information security news and analysis', url:'https://www.securityweek.com/', tag:'news' },
+  { cat:'news', color:'#ff6b35', name:'Cybersecurity Dive', desc:'Industry news for security professionals', url:'https://www.cybersecuritydive.com/', tag:'news' },
+  { cat:'news', color:'#ff6b35', name:'SC Media', desc:'Cybersecurity news, opinions and research', url:'https://www.scmagazine.com/', tag:'news' },
+
+  // VULNERABILITY DATABASES
+  { cat:'vuln', color:'#ff3b5c', name:'CVE Details', desc:'Searchable CVE database with statistics and charts', url:'https://www.cvedetails.com/', tag:'vuln' },
+  { cat:'vuln', color:'#ff3b5c', name:'Vulners', desc:'Security intelligence search engine, CVE + exploits', url:'https://vulners.com/', tag:'vuln' },
+  { cat:'vuln', color:'#ff3b5c', name:'Exploit-DB', desc:'Offensive Security exploit database', url:'https://www.exploit-db.com/', tag:'vuln' },
+  { cat:'vuln', color:'#ff3b5c', name:'VulnDB (RiskBased)', desc:'Commercial vulnerability intelligence database', url:'https://vulndb.cyberriskanalytics.com/', tag:'vuln' },
+  { cat:'vuln', color:'#ff3b5c', name:'OSV (Google)', desc:'Open source vulnerability database', url:'https://osv.dev/', tag:'vuln' },
+  { cat:'vuln', color:'#ff3b5c', name:'GitHub Security Advisories', desc:'Vulnerability advisories for open source packages', url:'https://github.com/advisories', tag:'vuln' },
+
+  // THREAT INTELLIGENCE
+  { cat:'intel', color:'#ffc107', name:'Recorded Future', desc:'Real-time threat intelligence platform', url:'https://www.recordedfuture.com/threat-intelligence-reports', tag:'intel' },
+  { cat:'intel', color:'#ffc107', name:'Mandiant Threat Intel', desc:'Google Mandiant advanced threat research', url:'https://www.mandiant.com/resources/blog', tag:'intel' },
+  { cat:'intel', color:'#ffc107', name:'Cisco Talos Blog', desc:'Threat intelligence & research from Cisco Talos', url:'https://blog.talosintelligence.com/', tag:'intel' },
+  { cat:'intel', color:'#ffc107', name:'Palo Alto Unit 42', desc:'Unit 42 threat research & intelligence blog', url:'https://unit42.paloaltonetworks.com/', tag:'intel' },
+  { cat:'intel', color:'#ffc107', name:'Crowdstrike Blog', desc:'Adversary intelligence and threat research', url:'https://www.crowdstrike.com/blog/', tag:'intel' },
+  { cat:'intel', color:'#ffc107', name:'MITRE ATT&CK', desc:'Knowledge base of adversary tactics & techniques', url:'https://attack.mitre.org/', tag:'intel' },
+  { cat:'intel', color:'#ffc107', name:'AlienVault OTX', desc:'Open threat exchange — community threat intelligence', url:'https://otx.alienvault.com/', tag:'intel' },
+  { cat:'intel', color:'#ffc107', name:'VirusTotal', desc:'Analyze suspicious files, domains, IPs and URLs', url:'https://www.virustotal.com/', tag:'intel' },
+
+  // TOOLS & RESOURCES
+  { cat:'tool', color:'#00e676', name:'Shodan', desc:'Search engine for internet-connected devices', url:'https://www.shodan.io/', tag:'tool' },
+  { cat:'tool', color:'#00e676', name:'SecurityHeaders.com', desc:'Scan website HTTP security headers', url:'https://securityheaders.com/', tag:'tool' },
+  { cat:'tool', color:'#00e676', name:'Have I Been Pwned', desc:'Check if your email appears in data breaches', url:'https://haveibeenpwned.com/', tag:'tool' },
+  { cat:'tool', color:'#00e676', name:'SSL Labs', desc:'Deep analysis of SSL/TLS configuration', url:'https://www.ssllabs.com/ssltest/', tag:'tool' },
+  { cat:'tool', color:'#00e676', name:'Censys', desc:'Internet asset discovery & exposure analysis', url:'https://search.censys.io/', tag:'tool' },
+  { cat:'tool', color:'#00e676', name:'Greynoise', desc:'Distinguish targeted attacks from internet noise', url:'https://www.greynoise.io/', tag:'tool' },
+
+  // VENDOR SECURITY PORTALS
+  { cat:'vendor', color:'#4a6177', name:'Cisco Security Advisories', desc:'Official Cisco product security advisories', url:'https://sec.cloudapps.cisco.com/security/center/publicationListing.x', tag:'vendor' },
+  { cat:'vendor', color:'#4a6177', name:'Dell Security Advisories', desc:'Dell Technologies security advisory database', url:'https://www.dell.com/support/security/en-us', tag:'vendor' },
+  { cat:'vendor', color:'#4a6177', name:'Juniper Security Advisories', desc:'Juniper Networks security bulletins', url:'https://supportportal.juniper.net/s/article/Juniper-SIRT-Advisories', tag:'vendor' },
+  { cat:'vendor', color:'#4a6177', name:'Palo Alto Security Advisories', desc:'Palo Alto Networks security advisories', url:'https://security.paloaltonetworks.com/', tag:'vendor' },
+  { cat:'vendor', color:'#4a6177', name:'Microsoft MSRC', desc:'Microsoft Security Response Center advisories', url:'https://msrc.microsoft.com/update-guide/vulnerability', tag:'vendor' },
+  { cat:'vendor', color:'#4a6177', name:'Fortinet PSIRT', desc:'Fortinet product security advisories', url:'https://www.fortiguard.com/psirt', tag:'vendor' },
+  { cat:'vendor', color:'#4a6177', name:'VMware Security Advisories', desc:'Broadcom/VMware security advisories', url:'https://support.broadcom.com/web/ecx/security-advisory', tag:'vendor' },
+  { cat:'vendor', color:'#4a6177', name:'F5 Security Advisories', desc:'F5 Networks security advisories', url:'https://my.f5.com/manage/s/article/K4918', tag:'vendor' },
+];
+
+// Group by category display name
+const CAT_META = {
+  gov:    { label:'Government & Official', icon:'🏛' },
+  news:   { label:'News & Blogs',          icon:'📰' },
+  vuln:   { label:'Vulnerability Databases', icon:'🔴' },
+  intel:  { label:'Threat Intelligence',   icon:'🕵' },
+  tool:   { label:'Tools & Scanners',      icon:'🛠' },
+  vendor: { label:'Vendor Security Portals', icon:'🏢' },
+};
+
+let activeResCat = 'all';
+
+function filterResources(el, cat) {
+  activeResCat = cat;
+  document.querySelectorAll('.res-filter-chip').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderResources();
+}
+
+function renderResources() {
+  const q   = (document.getElementById('resSearch')?.value||'').toLowerCase();
+  const grid = document.getElementById('resourcesGrid');
+
+  // Filter items
+  const filtered = RESOURCES.filter(r => {
+    if (activeResCat !== 'all' && r.cat !== activeResCat) return false;
+    if (q && !r.name.toLowerCase().includes(q) && !r.desc.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  // Group by category
+  const grouped = {};
+  filtered.forEach(r => {
+    if (!grouped[r.cat]) grouped[r.cat] = [];
+    grouped[r.cat].push(r);
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 24px;color:var(--muted)">
+      <div style="font-size:2rem;margin-bottom:10px">🔍</div>
+      <p style="font-size:0.82rem">No resources match your search.</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = Object.entries(grouped).map(([cat, items]) => {
+    const meta = CAT_META[cat] || { label: cat, icon:'•' };
+    const links = items.map(r => `
+      <a class="resource-link" href="${r.url}" target="_blank" rel="noopener">
+        <div class="rl-dot" style="background:${r.color}"></div>
+        <div class="rl-info">
+          <div class="rl-name">${r.name}</div>
+          <div class="rl-desc">${r.desc}</div>
+        </div>
+        <span class="rl-tag tag-${r.tag}">${r.tag.toUpperCase()}</span>
+        <span class="rl-arrow">→</span>
+      </a>`).join('');
+    return `
+      <div class="resource-category" data-cat="${cat}">
+        <div class="resource-cat-header">
+          <span class="resource-cat-icon">${meta.icon}</span>
+          <span class="resource-cat-title">${meta.label}</span>
+          <span class="resource-cat-badge">${items.length}</span>
+        </div>
+        <div class="resource-list">${links}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   SECTION NAV
+============================================================ */
+function showSection(id) {
+  document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.remove('active'));
+  document.querySelectorAll('.nav-section').forEach(s=>s.classList.remove('active'));
+  const tabs = document.querySelectorAll('.nav-tab');
+  const map  = ['cve','resources'];
+  tabs[map.indexOf(id)]?.classList.add('active');
+  document.getElementById(`sec-${id}`)?.classList.add('active');
+  if (id==='resources') renderResources();
+}
+
+/* ============================================================
+   VENDORS
+============================================================ */
+const DEFAULT_VENDORS = [
+  { id:'cisco',    label:'Cisco',     keyword:'cisco' },
+  { id:'dell',     label:'Dell',      keyword:'dell' },
+  { id:'juniper',  label:'Juniper',   keyword:'juniper' },
+  { id:'paloalto', label:'Palo Alto', keyword:'palo alto' },
+];
+
+function loadVendorsFromStorage() {
+  try {
+    const saved = localStorage.getItem('sw_vendors');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch(e) {}
+  return [...DEFAULT_VENDORS];
+}
+function saveVendorsToStorage() {
+  try { localStorage.setItem('sw_vendors', JSON.stringify(vendors)); } catch(e) {}
+}
+
+let vendors          = loadVendorsFromStorage();
+let activeVendor     = vendors[0].id;
+let cache            = {};
+let currentData      = [];
+let activeSeverities = new Set(['CRITICAL','HIGH','MEDIUM','LOW']);
+let activeDateDays   = 90;
+let currentPage      = 0;
+const PAGE_SIZE      = 15;
+let abortCtrl        = null;
+
+/* ============================================================
+   DATE HELPERS
+============================================================ */
+function nvdDateStr(d){ return d.toISOString().replace('Z','').split('.')[0]+'.000'; }
+function displayDate(d){ return d.toISOString().substring(0,10); }
+function daysAgoDate(n){ return new Date(Date.now()-n*86400000); }
+function isRecent(ds){ return ds && new Date(ds)>=daysAgoDate(7); }
+
+/* ============================================================
+   NVD API
+============================================================ */
+const NVD_BASE='https://services.nvd.nist.gov/rest/json/cves/2.0';
+
+async function fetchFromNVD(vendor,days,signal){
+  const params=new URLSearchParams({keywordSearch:vendor.keyword,resultsPerPage:100});
+  if(days>0){
+    params.set('pubStartDate',nvdDateStr(daysAgoDate(days)));
+    params.set('pubEndDate',nvdDateStr(new Date()));
+  }
+  const res=await fetch(`${NVD_BASE}?${params}`,{signal});
+  if(!res.ok) throw new Error(`NVD API returned ${res.status}`);
+  const json=await res.json();
+  const parsed=parseCVEs(json.vulnerabilities||[]);
+  parsed.sort((a,b)=>b.published>a.published?1:-1);
+  return parsed;
+}
+
+function parseCVEs(vulns){
+  return vulns.map(v=>{
+    const cve=v.cve,id=cve.id;
+    const desc=cve.descriptions?.find(d=>d.lang==='en')?.value||'No description.';
+    const metrics=cve.metrics||{};
+    let score=null,severity='NONE',vector=null,cvssVersion=null;
+    const m31=metrics.cvssMetricV31?.[0],m30=metrics.cvssMetricV30?.[0],m2=metrics.cvssMetricV2?.[0];
+    if(m31){score=m31.cvssData.baseScore;severity=m31.cvssData.baseSeverity;vector=m31.cvssData.vectorString;cvssVersion='3.1';}
+    else if(m30){score=m30.cvssData.baseScore;severity=m30.cvssData.baseSeverity;vector=m30.cvssData.vectorString;cvssVersion='3.0';}
+    else if(m2){score=m2.cvssData.baseScore;severity=m2.baseSeverity||sfScore(m2.cvssData.baseScore);vector=m2.cvssData.vectorString;cvssVersion='2.0';}
+    const refs=(cve.references||[]).slice(0,5).map(r=>r.url);
+    const published=cve.published?.substring(0,10)||'';
+    const modified=cve.lastModified?.substring(0,10)||'';
+    return{id,desc,score,severity:(severity||'NONE').toUpperCase(),vector,cvssVersion,refs,published,modified};
+  });
+}
+function sfScore(s){if(s>=9)return'CRITICAL';if(s>=7)return'HIGH';if(s>=4)return'MEDIUM';if(s>0)return'LOW';return'NONE';}
+
+/* ============================================================
+   LOAD
+============================================================ */
+async function loadView(vendorId,days,force=false){
+  const key=`${vendorId}:${days}`;
+  if(cache[key]&&!force){
+    currentData=cache[key];currentPage=0;
+    renderTable();updateStats();
+    setStatus('done',`${currentData.length} CVEs loaded (cached)`);
+    return;
+  }
+  if(abortCtrl)abortCtrl.abort();
+  abortCtrl=new AbortController();
+  const vendor=vendors.find(v=>v.id===vendorId);
+  setStatus('fetching','Fetching from NVD API…');
+  renderTable(false,true);setTabLoading(vendorId,true);
+  try{
+    const data=await fetchFromNVD(vendor,days,abortCtrl.signal);
+    cache[key]=data;
+    if(activeVendor===vendorId&&activeDateDays===days){
+      currentData=data;currentPage=0;
+      updateTabBadge(vendorId,data.length);setTabLoading(vendorId,false);
+      renderTable();updateStats();
+      setStatus('done',`${data.length} CVEs · newest first · ${displayDate(new Date())}`);
+      document.getElementById('lastUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+    }
+  }catch(e){
+    if(e.name==='AbortError')return;
+    console.error(e);setTabLoading(vendorId,false);updateTabBadge(vendorId,'!');
+    currentData=[];renderTable(true);
+    setStatus('err',`Failed: ${e.message} — wait ~30s and Refresh`);
+  }
+}
+
+function setStatus(type,msg){
+  const el=document.getElementById('fetchStatus');
+  el.className='fetch-status '+type;el.textContent=msg;
+}
+
+async function refreshCurrent(){
+  const btn=document.getElementById('refreshBtn');btn.classList.add('spinning');
+  delete cache[`${activeVendor}:${activeDateDays}`];
+  await loadView(activeVendor,activeDateDays,true);
+  btn.classList.remove('spinning');
+}
+
+function setTabLoading(id,loading){
+  const tab=document.querySelector(`.vendor-tab[data-id="${id}"]`);
+  if(!tab)return;tab.classList.toggle('loading-tab',loading);
+  if(loading)tab.querySelector('.badge').textContent='…';
+}
+function updateTabBadge(id,count){
+  const tab=document.querySelector(`.vendor-tab[data-id="${id}"]`);
+  if(tab)tab.querySelector('.badge').textContent=count;
+}
+
+function setDateRange(el,days){
+  activeDateDays=days;currentPage=0;
+  document.querySelectorAll('.date-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');loadView(activeVendor,days);
+}
+
+/* ============================================================
+   TABS
+============================================================ */
+function renderTabs(){
+  document.getElementById('vendorTabs').innerHTML = vendors.map(v => `
+    <div style="position:relative;display:inline-flex;align-items:center;">
+      <button class="vendor-tab${v.id===activeVendor?' active':''}" data-id="${v.id}"
+        onclick="selectVendor('${v.id}')" style="padding-right:${vendors.length>1?'34px':'16px'}">
+        ${v.label} <span class="badge">—</span>
+      </button>
+      ${vendors.length > 1
+        ? `<button class="vendor-remove-btn" title="Remove ${v.label}" onclick="removeVendor(event,'${v.id}')">✕</button>`
+        : ''}
+    </div>`).join('');
+}
+
+function selectVendor(id){
+  activeVendor=id;currentPage=0;
+  document.querySelectorAll('.vendor-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelector(`.vendor-tab[data-id="${id}"]`)?.classList.add('active');
+  loadView(id,activeDateDays);
+}
+
+function removeVendor(e, id){
+  e.stopPropagation();
+  const v = vendors.find(x=>x.id===id);
+  if (!v) return;
+  if (!confirm(`Remove "${v.label}" from the dashboard?`)) return;
+  vendors = vendors.filter(x=>x.id!==id);
+  saveVendorsToStorage();
+  // clean cache
+  Object.keys(cache).filter(k=>k.startsWith(id+':')).forEach(k=>delete cache[k]);
+  if (activeVendor === id) activeVendor = vendors[0].id;
+  renderTabs();
+  loadView(activeVendor, activeDateDays);
+}
+
+/* ============================================================
+   TABLE
+============================================================ */
+function getFiltered(){
+  const q=document.getElementById('searchInput').value.toLowerCase();
+  return currentData.filter(cve=>{
+    if(!activeSeverities.has(cve.severity)&&cve.severity!=='NONE')return false;
+    if(q&&!cve.id.toLowerCase().includes(q)&&!cve.desc.toLowerCase().includes(q))return false;
+    return true;
+  });
+}
+
+function renderTable(error=false,skeleton=false){
+  const tbody=document.getElementById('cveBody'),pag=document.getElementById('pagination');
+  if(skeleton){
+    tbody.innerHTML=Array(8).fill(0).map((_,i)=>`
+      <tr class="skel-row skeleton" style="animation-delay:${i*0.07}s">
+        <td><div class="skel-bar" style="width:120px"></div></td>
+        <td><div class="skel-bar" style="width:65px"></div></td>
+        <td><div class="skel-bar" style="width:100px"></div></td>
+        <td><div class="skel-bar" style="width:260px"></div></td>
+        <td><div class="skel-bar" style="width:75px"></div></td>
+      </tr>`).join('');
+    pag.style.display='none';return;
+  }
+  if(error){
+    tbody.innerHTML=`<tr><td colspan="5"><div class="empty-state">
+      <div class="ico">⚠</div><p>Failed to load. NVD may be rate-limiting — wait ~30s and Refresh.</p>
+    </div></td></tr>`;pag.style.display='none';return;
+  }
+  const filtered=getFiltered(),total=filtered.length,totalPages=Math.ceil(total/PAGE_SIZE)||1;
+  if(currentPage>=totalPages)currentPage=totalPages-1;
+  const slice=filtered.slice(currentPage*PAGE_SIZE,(currentPage+1)*PAGE_SIZE);
+  if(slice.length===0){
+    const period=activeDateDays>0?`in the last ${activeDateDays} days`:'';
+    tbody.innerHTML=`<tr><td colspan="5"><div class="empty-state">
+      <div class="ico">🔍</div><p>No CVEs found ${period} matching your filters.</p>
+    </div></td></tr>`;pag.style.display='none';return;
+  }
+  tbody.innerHTML=slice.map((cve,i)=>{
+    const score=cve.score!==null?cve.score.toFixed(1):'N/A';
+    const pct=cve.score!==null?Math.round(cve.score/10*100):0;
+    const clr={CRITICAL:'var(--crit)',HIGH:'var(--high)',MEDIUM:'var(--med)',LOW:'var(--low)',NONE:'var(--muted)'}[cve.severity]||'var(--muted)';
+    const isV2=cve.cvssVersion?.startsWith('2');
+    const verTag=cve.cvssVersion?`<span class="cvss-version-tag${isV2?' v2':''}">v${cve.cvssVersion}</span>`:'';
+    const dateClass=isRecent(cve.published)?'date-cell date-new':'date-cell';
+    const newLabel=isRecent(cve.published)?' 🆕':'';
+    return `
+      <tr style="animation-delay:${i*0.03}s" onclick="openModal('${escHtml(cve.id)}')">
+        <td class="cve-id"><a href="#" onclick="event.preventDefault()">${escHtml(cve.id)}</a></td>
+        <td><span class="severity-badge sev-${cve.severity}">${cve.severity}</span></td>
+        <td><div class="cvss-cell"><div class="cvss-top"><span class="cvss-score" style="color:${clr}">${score}</span>${verTag}</div>
+          <div class="cvss-bar"><div class="cvss-fill" style="width:${pct}%;background:${clr}"></div></div></div></td>
+        <td class="desc-cell" title="${escHtml(cve.desc)}">${escHtml(cve.desc)}</td>
+        <td class="${dateClass}">${cve.published}${newLabel}</td>
+      </tr>`;
+  }).join('');
+  pag.style.display='flex';
+  document.getElementById('pageInfo').textContent=`${total} result${total!==1?'s':''} · Page ${currentPage+1}/${totalPages}`;
+  document.getElementById('prevBtn').disabled=currentPage===0;
+  document.getElementById('nextBtn').disabled=currentPage>=totalPages-1;
+}
+
+function changePage(dir){currentPage+=dir;renderTable();document.querySelector('.cve-panel').scrollIntoView({behavior:'smooth'});}
+function onSearch(){currentPage=0;renderTable();}
+
+function updateStats(){
+  const counts={CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,NONE:0};
+  currentData.forEach(c=>counts[c.severity]=(counts[c.severity]||0)+1);
+  document.getElementById('sc-total').textContent=currentData.length;
+  document.getElementById('sc-crit').textContent=counts.CRITICAL;
+  document.getElementById('sc-high').textContent=counts.HIGH;
+  document.getElementById('sc-med').textContent=counts.MEDIUM;
+  document.getElementById('sc-low').textContent=(counts.LOW||0)+(counts.NONE||0);
+}
+
+function toggleFilter(el,sev){
+  const cls={CRITICAL:'active-crit',HIGH:'active-high',MEDIUM:'active-med',LOW:'active-low'}[sev];
+  if(activeSeverities.has(sev)){if(activeSeverities.size>1){activeSeverities.delete(sev);el.className='filter-chip';}}
+  else{activeSeverities.add(sev);el.classList.add(cls);}
+  currentPage=0;renderTable();
+}
+
+/* ============================================================
+   CVE MODAL
+============================================================ */
+function openModal(cveId){
+  const cve=currentData.find(c=>c.id===cveId);if(!cve)return;
+  document.getElementById('modalTitle').textContent=cve.id;
+  document.getElementById('modalDesc').textContent=cve.desc;
+  const score=cve.score!==null?cve.score.toFixed(1):'N/A';
+  const verLabel=cve.cvssVersion?` (v${cve.cvssVersion})`:'';
+  const isV2=cve.cvssVersion?.startsWith('2');
+  document.getElementById('modalMeta').innerHTML=`
+    <div class="meta-item"><div class="label">Severity</div><div class="value"><span class="severity-badge sev-${cve.severity}">${cve.severity}</span></div></div>
+    <div class="meta-item"><div class="label">CVSS${verLabel}</div>
+      <div class="value" style="color:${scoreColor(cve.score)}">${score}
+        ${cve.cvssVersion?`<span class="cvss-version-tag${isV2?' v2':''}" style="margin-left:5px;vertical-align:middle">v${cve.cvssVersion}</span>`:''}
+      </div></div>
+    <div class="meta-item"><div class="label">Published</div><div class="value">${cve.published}${isRecent(cve.published)?' 🆕':''}</div></div>
+    <div class="meta-item"><div class="label">Last Modified</div><div class="value">${cve.modified}</div></div>
+    <div class="meta-item" style="grid-column:1/-1"><div class="label">CVSS Vector</div>
+      <div class="value" style="font-size:0.7rem;word-break:break-all;color:var(--muted)">${cve.vector||'N/A'}</div></div>`;
+  document.getElementById('modalRefs').innerHTML=cve.refs.length
+    ?`<div class="modal-label">References</div>${cve.refs.map(r=>`<div style="margin:4px 0"><a href="${r}" target="_blank" style="color:var(--accent);font-size:0.76rem;word-break:break-all">${r}</a></div>`).join('')}`:'';
+  document.getElementById('modalNvdLink').href=`https://nvd.nist.gov/vuln/detail/${cveId}`;
+  document.getElementById('cveModal').classList.add('open');
+}
+function closeModal(){document.getElementById('cveModal').classList.remove('open');}
+function scoreColor(s){if(s===null)return'var(--muted)';if(s>=9)return'var(--crit)';if(s>=7)return'var(--high)';if(s>=4)return'var(--med)';return'var(--low)';}
+
+/* ============================================================
+   ADD VENDOR
+============================================================ */
+function openAddVendor(){document.getElementById('addVendorModal').classList.add('open');}
+function closeAddVendor(){document.getElementById('addVendorModal').classList.remove('open');}
+function addVendor(){
+  const keyword=document.getElementById('newVendorName').value.trim().toLowerCase();
+  const label=document.getElementById('newVendorLabel').value.trim();
+  if(!keyword||!label){alert('Please fill in both fields.');return;}
+  const id=keyword.replace(/\s+/g,'_');
+  if(vendors.find(v=>v.id===id)){alert('Vendor already added.');return;}
+  vendors.push({id,label,keyword});
+  saveVendorsToStorage();
+  renderTabs();
+  closeAddVendor();
+  document.getElementById('newVendorName').value='';
+  document.getElementById('newVendorLabel').value='';
+  selectVendor(id);
+}
+
+/* ============================================================
+   UTILS
+============================================================ */
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');});
+});
+
+/* ============================================================
+   INIT
+============================================================ */
+function init(){
+  renderTabs();
+  renderTable(false,true);
+  loadView(activeVendor,activeDateDays);
+}
+init();
+</script>
+</body>
+</html>
